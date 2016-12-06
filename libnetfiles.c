@@ -11,12 +11,19 @@
 
 int server_socket;
 
-int netopen(const char * pathname, int flags){
-	//flags: O_RDONLY, O_WRONLY, or O_RDWR
+/*This method takes a pathname and a permissions flag and
+returns a file descriptor or -1 if an error occured
 
-	int filedes = -1;
+flags: O_RDONLY, O_WRONLY, or O_RDWR
+	
+required: EACCES, EINTR, EISDIR, ENOENT, EROFS
+optional: ENFILE, EWOULDBLOCK, EPERM*/
+	
+int netopen(const char * pathname, int flags){
 	
 	char buffer[500];
+	Int_packet response;
+
 	strcpy(buffer, "o");
 	strcat(buffer, "rw");
 	strcat(buffer, pathname);
@@ -24,14 +31,16 @@ int netopen(const char * pathname, int flags){
 
 	send(server_socket, buffer, strlen(buffer), 0);
 
-	//recv(server_socket, buffer, strlen(buffer), 0);
+	recv(server_socket, &response, sizeof(response), 0);
 
-	//return file descriptor
-	//if error, set errno and return -1
-	
-	//required: EACCES, EINTR, EISDIR, ENOENT, EROFS
-	//optional: ENFILE, EWOULDBLOCK, EPERM
-	return filedes;
+	if(response.type == 'e'){
+		errno = response.i;
+		perror("Error");
+		return -1;
+	}
+	else{
+		return response.i;
+	}
 }
 
 ssize_t netread(int fildes, void *buf, size_t nbyte){
@@ -41,7 +50,7 @@ ssize_t netread(int fildes, void *buf, size_t nbyte){
 
 	//required: ETIMEDOUT, EBADF, ECONNRESET
 
-	return NULL;
+	return (ssize_t)0;
 }
 
 ssize_t netwrite(int filedes, const void *buf, size_t nbyte){
@@ -51,16 +60,34 @@ ssize_t netwrite(int filedes, const void *buf, size_t nbyte){
 
 	//required: EBADF, ETIMEOUT, ECONNRESET
 
-	return NULL;
+	return (ssize_t)0;
 }
 
+/* This method takes a file descriptor, connects to the server
+and attempts to close the remote file. If close fails, returns
+-1, otherwise returns 0
+
+required: EBADF
+*/
 int netclose(int fd){
 	
-	//return 0 on success, -1 on error
+	Int_packet message;
+	message.type = 'c';
+	message.i = fd;
 
-	//required: EBADF
+	send(server_socket, &message, sizeof(message), 0);
 
-	return -1;
+	if(recv(server_socket, &message, sizeof(message), 0) == -1){
+		perror("Receive error");
+		return 0;
+	}
+
+	if(message.type == 'e'){
+		errno = message.i;
+		perror("Error");
+		return -1;
+	}
+	return 0;
 }
 
 int netserverinit(char * hostname, int filemode){

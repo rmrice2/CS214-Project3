@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <string.h>
+#include <errno.h>
 #include "libnetfiles.h"
 
 int main(int argc, char * argv[]){
@@ -57,7 +58,7 @@ int main(int argc, char * argv[]){
 
     //start listening on the port, allow 5 pending connections
     else{
-        if(listen(serverfd, 5) < 0){
+        if(listen(serverfd, 10) < 0){
             perror("Error on listen");
             exit(0);
         }
@@ -67,10 +68,15 @@ int main(int argc, char * argv[]){
     char buffer[numbytes];
 
     //loop while waiting for connections
-    while((clientfd = accept(serverfd, NULL, NULL))) {
+    while(1) {
+        printf("waiting...\n");
+        clientfd = accept(serverfd, NULL, NULL);
+
         printf("Connected to a client.\n");
+
+        //todo: split off a new thread right here to serve clientfd
         
-        if((recv(clientfd, buffer, 50 , 0)) == -1){
+        if((recv(clientfd, buffer, sizeof(buffer) , 0)) == -1){
             perror("Error");
             exit(1);
         }
@@ -78,19 +84,19 @@ int main(int argc, char * argv[]){
             char selector = buffer[0];
 
             if(selector == 'o'){
-                handle_open(buffer);
+                handle_open(clientfd, buffer);
             }
             else if(selector == 'r'){
-                handle_read(buffer);
+                handle_read(clientfd, buffer);
             }
             else if(selector == 'w'){
-                handle_write(buffer);
+                handle_write(clientfd, buffer);
             }
             else if(selector == 'c'){
-                handle_close(buffer);
+                handle_close(clientfd, buffer);
             }
             else{
-                printf("Error: invalid message format");
+                printf("Error: invalid message format.\n");
             }
         }
     }
@@ -99,40 +105,58 @@ int main(int argc, char * argv[]){
     return 0;
 }
 
-/*this method accepts a buffer, extracts the filename within,
-attempts to open the file, and sends a char array to the client
-containing either the file descriptor or error info*/
-void handle_open(char * buffer){
+/*this method accepts a client socket and a buffer, 
+extracts the filename within, attempts to open the file, 
+and sends a char array to the client containing either the 
+file descriptor or error info*/
+void handle_open(int clientfd, char * buffer){
     char filename[500];
-    //char return_message[];
+    //char return_message[5];
+    int len;
+    Int_packet response;
     
-    int len = strlen(buffer);
-    printf("filename length is %d\n", len);
-
+    len = strlen(buffer);
+    
     sprintf(filename, "%.*s", len -5 , buffer + 3);
     printf("%s\n", filename);
 
-    int filedes = open(filename, 0);
+    response.i = open(filename, 0);
 
-    if(filedes < 0){
+    if(response.i < 0){
         perror("File open error");
+        response.type = 'e';
+        response.i = errno;
+
+        send(clientfd, &response, sizeof(response), 0);
+
+        return;
     }
 
-    printf("file descriptor: %d\n", filedes);
+    response.type = 'f';
 
+    send(clientfd, &response, sizeof(response), 0);
+}
+
+void handle_read(int clientfd, char * buffer){
 
 }
 
-void handle_read(char * buffer){
+void handle_write(int clientfd, char * buffer){
 
 }
 
-void handle_write(char * buffer){
+void handle_close(int clientfd, char * buffer){
+    Int_packet response;
+    Int_packet * message = (Int_packet *)buffer;
 
-}
+    if(close(message->i) == -1){
+        response.type = 'e';
+        response.i = errno;
+    }
 
-void handle_close(char * buffer){
+    send(clientfd, &response, sizeof(response), 0);
 
+    return;
 }
 
 /*
