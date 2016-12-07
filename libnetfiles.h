@@ -12,6 +12,7 @@ f - file descriptor
 typedef struct int_packet{
 	char type;
 	int i;
+	size_t size;
 } Int_packet;
 
 int netopen(const char *, int);
@@ -20,6 +21,7 @@ ssize_t netwrite(int, const void *, size_t);
 int netclose(int);
 int netserverinit(char *, int);
 
+void * serve_client(void *);
 void handle_open(int, char *);
 void handle_read(int, char *);
 void handle_write(int, char *);

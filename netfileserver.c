@@ -56,26 +56,34 @@ int main(int argc, char * argv[]){
         exit(2);
     }
 
+    freeaddrinfo(servinfo); // all done with this structure
+
     //start listening on the port, allow 5 pending connections
-    else{
-        if(listen(serverfd, 10) < 0){
+    if(listen(serverfd, 10) < 0){
             perror("Error on listen");
             exit(0);
-        }
     }
-
-    int numbytes = 500;
-    char buffer[numbytes];
 
     //loop while waiting for connections
     while(1) {
-        printf("waiting...\n");
         clientfd = accept(serverfd, NULL, NULL);
 
         printf("Connected to a client.\n");
 
-        //todo: split off a new thread right here to serve clientfd
+        pthread_t * thread = malloc(sizeof(pthread_t *));
         
+        pthread_create(thread, NULL, serve_client, (void *)&clientfd);
+
+    }
+    return 0;
+}
+
+void * serve_client(void * ptr){
+
+    int clientfd = *(int *)ptr;
+    char buffer[500];
+
+    while(1){
         if((recv(clientfd, buffer, sizeof(buffer) , 0)) == -1){
             perror("Error");
             exit(1);
@@ -101,24 +109,22 @@ int main(int argc, char * argv[]){
         }
     }
 
-    freeaddrinfo(servinfo); // all done with this structure
-    return 0;
-}
+    return NULL;
 
+}
 /*this method accepts a client socket and a buffer, 
 extracts the filename within, attempts to open the file, 
 and sends a char array to the client containing either the 
 file descriptor or error info*/
 void handle_open(int clientfd, char * buffer){
     char filename[500];
-    //char return_message[5];
     int len;
     Int_packet response;
     
     len = strlen(buffer);
+    printf("string len: %d\n", len);
     
-    sprintf(filename, "%.*s", len -5 , buffer + 3);
-    printf("%s\n", filename);
+    sprintf(filename, "%.*s", len - 4, buffer + 3);
 
     response.i = open(filename, 0);
 
@@ -133,11 +139,33 @@ void handle_open(int clientfd, char * buffer){
     }
 
     response.type = 'f';
+    printf("Opened file: %s\n", filename);
 
     send(clientfd, &response, sizeof(response), 0);
 }
 
 void handle_read(int clientfd, char * buffer){
+    Int_packet * message;
+    char * response;
+    int filedes;
+    FILE * fileptr;
+    size_t bytes_read, nbytes;
+
+    message = (Int_packet *)buffer;
+    filedes = message->i;
+    nbytes = message->size;
+    
+    response = malloc(nbytes + 9);
+    response[0] = 'r';
+
+    fileptr = fdopen(filedes, "r"); //get the file ptr from file descriptor
+
+    bytes_read = fread(response + 9, 1, nbytes, fileptr);
+    memcpy(response + 1, &bytes_read, sizeof(bytes_read));
+
+    send(clientfd, response, bytes_read + 9, 0);
+
+
 
 }
 
@@ -152,6 +180,9 @@ void handle_close(int clientfd, char * buffer){
     if(close(message->i) == -1){
         response.type = 'e';
         response.i = errno;
+    }
+    else{
+        printf("Closed file.\n");
     }
 
     send(clientfd, &response, sizeof(response), 0);

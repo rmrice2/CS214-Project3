@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <pthread.h>
 #include "libnetfiles.h"
 
 int server_socket;
@@ -43,7 +44,34 @@ int netopen(const char * pathname, int flags){
 	}
 }
 
-ssize_t netread(int fildes, void *buf, size_t nbyte){
+ssize_t netread(int filedes, void *buf, size_t nbyte){
+
+	ssize_t bytes_read;
+	Int_packet message;
+	char * response = malloc(nbyte + sizeof(char) + sizeof(ssize_t));
+	message.type = 'r';
+	message.i = filedes;
+	message.size = nbyte;
+
+	//char * response = malloc(nbyte + 1);
+
+	send(server_socket, &message, sizeof(message), 0);
+
+	recv(server_socket, response, nbyte + 9, 0);
+
+	if(response[0] == 'e'){
+		return -1;
+	}
+	else if(response[0] == 'r'){
+
+		memcpy(&bytes_read, response + 1, sizeof(ssize_t));
+		memcpy(buf, response + 9, bytes_read);
+		
+		return bytes_read;
+	}
+
+	return -1;
+
 
 	//return the number of bytes read
 	//if error, set errno and return -1
