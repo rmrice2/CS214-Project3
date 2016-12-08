@@ -126,7 +126,7 @@ void handle_open(int clientfd, char * buffer){
     
     sprintf(filename, "%.*s", len - 4, buffer + 3);
 
-    response.i = open(filename, 0);
+    response.i = open(filename, O_RDWR);
 
     if(response.i < 0){
         perror("File open error");
@@ -148,8 +148,8 @@ void handle_read(int clientfd, char * buffer){
     Int_packet * message;
     char * response;
     int filedes;
-    FILE * fileptr;
-    size_t bytes_read, nbytes;
+    size_t nbytes;
+    ssize_t bytes_read;
 
     message = (Int_packet *)buffer;
     filedes = message->i;
@@ -158,19 +158,48 @@ void handle_read(int clientfd, char * buffer){
     response = malloc(nbytes + 9);
     response[0] = 'r';
 
-    fileptr = fdopen(filedes, "r"); //get the file ptr from file descriptor
+    bytes_read = read(filedes, response + 9, nbytes);
 
-    bytes_read = fread(response + 9, 1, nbytes, fileptr);
-    memcpy(response + 1, &bytes_read, sizeof(bytes_read));
+    if(bytes_read == -1){
+        Int_packet err;
+        err.type = 'e';
+        err.i = errno;
 
-    send(clientfd, response, bytes_read + 9, 0);
+        perror("Error");
+        send(clientfd, &err, sizeof(err), 0);
+    }
 
-
-
+    else{
+        printf("Read %ld bytes from file.\n", bytes_read);
+        memcpy(response + 1, &bytes_read, sizeof(bytes_read));
+        send(clientfd, response, bytes_read + 9, 0);
+    }
 }
 
 void handle_write(int clientfd, char * buffer){
+    Int_packet response;
+    int filedes;
+    size_t nbytes;
+    ssize_t bytes_written;
 
+    memcpy(&filedes, buffer + 1, sizeof(int));
+    memcpy(&nbytes, buffer + 5, sizeof(size_t));
+
+    bytes_written = write(filedes, buffer + 13, nbytes);
+
+    if(bytes_written == -1){
+        perror("error");
+        response.type = 'e';
+        response.i = errno;
+
+        send(clientfd, &response, sizeof(response), 0);
+    }
+
+    printf("Wrote %ld bytes to file.\n", bytes_written);
+
+    response.type = 'w';
+    response.size = bytes_written;
+    send(clientfd, &response, sizeof(response), 0);
 }
 
 void handle_close(int clientfd, char * buffer){
@@ -189,22 +218,3 @@ void handle_close(int clientfd, char * buffer){
 
     return;
 }
-
-/*
-
-SERVER:
-start up server
-set socket
-listen for client connections
-connect to client
-receive message
-run file operation
-return info
-close connection
-
-CLIENT:
-runs netserverinit()
-if host found, run net commands
-on net command, library connects to host and sends message
-on response, library returns relevent data to client
-*/

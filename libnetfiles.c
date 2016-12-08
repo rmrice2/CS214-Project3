@@ -53,8 +53,6 @@ ssize_t netread(int filedes, void *buf, size_t nbyte){
 	message.i = filedes;
 	message.size = nbyte;
 
-	//char * response = malloc(nbyte + 1);
-
 	send(server_socket, &message, sizeof(message), 0);
 
 	recv(server_socket, response, nbyte + 9, 0);
@@ -81,14 +79,33 @@ ssize_t netread(int filedes, void *buf, size_t nbyte){
 	return (ssize_t)0;
 }
 
+//return number of bytes written (must be less than nbyte)
+//if error, set errno and return -1
+
+//required: EBADF, ETIMEOUT, ECONNRESET
 ssize_t netwrite(int filedes, const void *buf, size_t nbyte){
+	/* packet structure:
+	|char|int|size_t|char array|  */
+	
+	size_t message_len = nbyte + 1 + sizeof(int) + sizeof(size_t);
+	char * message = malloc(message_len);
+	Int_packet response;
 
-	//return number of bytes written (must be less than nbyte)
-	//if error, set errno and return -1
+	message[0] = 'w';
+	memcpy(message + 1, &filedes, sizeof(int));
+	memcpy(message + 1 + sizeof(int), &nbyte, sizeof(nbyte));
+	memcpy(message + 1 + sizeof(int) + sizeof(size_t), buf, nbyte);
 
-	//required: EBADF, ETIMEOUT, ECONNRESET
+	send(server_socket, message, message_len, 0);
 
-	return (ssize_t)0;
+	recv(server_socket, &response, sizeof(response), 0);
+
+	if(response.type == 'e'){
+		errno = response.i;
+		return -1;
+	}
+
+	return response.size;
 }
 
 /* This method takes a file descriptor, connects to the server
@@ -107,7 +124,7 @@ int netclose(int fd){
 
 	if(recv(server_socket, &message, sizeof(message), 0) == -1){
 		perror("Receive error");
-		return 0;
+		return -1;
 	}
 
 	if(message.type == 'e'){
@@ -115,6 +132,7 @@ int netclose(int fd){
 		perror("Error");
 		return -1;
 	}
+
 	return 0;
 }
 
