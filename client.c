@@ -1,3 +1,4 @@
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
 #include "libnetfiles.h"
@@ -13,13 +14,11 @@ int main(){
 		return 0;
 	}
 
-	filedes = netopen("hello.txt", 0);
-	netread(filedes, buffer, 50);
-	printf("file says: %s\n", buffer);
-	int hi = netwrite(filedes, writestr, strlen(writestr));
-	printf("write returned: %d\n", hi);
-	//memset(buffer, 0, 500);
-	//netread(file, buffer, 50);
+	filedes = netopen("hello.txt", O_RDWR);
+	if((netread(filedes, buffer, 50)) != -1){
+		printf("file says: %s\n", buffer);
+	}
+	netwrite(filedes, writestr, strlen(writestr));
 	netclose(filedes);
 	
 	return 0;

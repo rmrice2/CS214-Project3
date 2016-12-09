@@ -1,12 +1,12 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
-#include <string.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include "libnetfiles.h"
 
 int main(int argc, char * argv[]){
@@ -84,9 +84,17 @@ void * serve_client(void * ptr){
     char buffer[500];
 
     while(1){
-        if((recv(clientfd, buffer, sizeof(buffer) , 0)) == -1){
+        memset(buffer, 0, sizeof(buffer));
+
+        int try_recv = recv(clientfd, buffer, sizeof(buffer), 0);
+
+        if(try_recv == -1){
             perror("Error");
-            exit(1);
+            return NULL;
+        }
+        else if(try_recv == 0){
+            printf("Closing connection.\n");
+            return NULL;
         }
         else{
             char selector = buffer[0];
@@ -119,16 +127,26 @@ file descriptor or error info*/
 void handle_open(int clientfd, char * buffer){
     char filename[500];
     int len;
+    char mode;
     Int_packet response;
     
     len = strlen(buffer);
-    printf("string len: %d\n", len);
     
-    sprintf(filename, "%.*s", len - 4, buffer + 3);
+    sprintf(filename, "%.*s", len - 2, buffer + 2);
 
-    response.i = open(filename, O_RDWR);
+    mode = buffer[1];
+    errno = 0;
+    if(mode == 'r'){
+        response.i = open(filename, O_RDONLY);
+    }
+    else if(mode == 'w'){
+        response.i = open(filename, O_WRONLY);
+    }
+    else if(mode == 'b'){
+        response.i = open(filename, O_RDWR);
+    }
 
-    if(response.i < 0){
+    if(response.i == -1){
         perror("File open error");
         response.type = 'e';
         response.i = errno;
@@ -138,7 +156,7 @@ void handle_open(int clientfd, char * buffer){
         return;
     }
 
-    response.type = 'f';
+    response.type = 'r';
     printf("Opened file: %s\n", filename);
 
     send(clientfd, &response, sizeof(response), 0);
@@ -158,6 +176,7 @@ void handle_read(int clientfd, char * buffer){
     response = malloc(nbytes + 9);
     response[0] = 'r';
 
+    errno = 0;
     bytes_read = read(filedes, response + 9, nbytes);
 
     if(bytes_read == -1){
@@ -165,7 +184,7 @@ void handle_read(int clientfd, char * buffer){
         err.type = 'e';
         err.i = errno;
 
-        perror("Error");
+        perror("Read error");
         send(clientfd, &err, sizeof(err), 0);
     }
 
@@ -185,14 +204,17 @@ void handle_write(int clientfd, char * buffer){
     memcpy(&filedes, buffer + 1, sizeof(int));
     memcpy(&nbytes, buffer + 5, sizeof(size_t));
 
+    errno = 0;
     bytes_written = write(filedes, buffer + 13, nbytes);
 
     if(bytes_written == -1){
-        perror("error");
+        perror("Write error");
         response.type = 'e';
         response.i = errno;
 
         send(clientfd, &response, sizeof(response), 0);
+
+        return;
     }
 
     printf("Wrote %ld bytes to file.\n", bytes_written);
@@ -206,9 +228,11 @@ void handle_close(int clientfd, char * buffer){
     Int_packet response;
     Int_packet * message = (Int_packet *)buffer;
 
+    errno = 0;
     if(close(message->i) == -1){
         response.type = 'e';
         response.i = errno;
+        perror("Close error");
     }
     else{
         printf("Closed file.\n");

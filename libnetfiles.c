@@ -1,13 +1,14 @@
+#include <errno.h>
+#include <fcntl.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
 #include <string.h>
-#include <netdb.h>
-#include <sys/types.h>
-#include <netinet/in.h>
 #include <sys/socket.h>
-#include <pthread.h>
+#include <sys/types.h>
+#include <unistd.h>
 #include "libnetfiles.h"
 
 int server_socket;
@@ -26,7 +27,21 @@ int netopen(const char * pathname, int flags){
 	Int_packet response;
 
 	strcpy(buffer, "o");
-	strcat(buffer, "rw");
+	
+	if(flags == O_RDONLY){
+		strcat(buffer, "r");
+	}
+	else if(flags == O_WRONLY){
+		strcat(buffer, "w");
+	}
+	else if(flags == O_RDWR){
+		strcat(buffer, "b");
+	}
+	else{
+		printf("Error: Invalid flag.");
+		return -1;
+	}
+
 	strcat(buffer, pathname);
 	strcat(buffer, "\0");
 
@@ -39,8 +54,11 @@ int netopen(const char * pathname, int flags){
 		perror("Error");
 		return -1;
 	}
-	else{
+	else if(response.type == 'r'){
 		return response.i;
+	}
+	else{
+		return -1;
 	}
 }
 
@@ -115,21 +133,17 @@ and attempts to close the remote file. If close fails, returns
 required: EBADF
 */
 int netclose(int fd){
-	
-	Int_packet message;
+	Int_packet message, response;
 	message.type = 'c';
 	message.i = fd;
 
 	send(server_socket, &message, sizeof(message), 0);
 
-	if(recv(server_socket, &message, sizeof(message), 0) == -1){
-		perror("Receive error");
-		return -1;
-	}
+	recv(server_socket, &response, sizeof(response), 0);
 
-	if(message.type == 'e'){
-		errno = message.i;
-		perror("Error");
+	if(response.type == 'e'){
+		errno = response.i;
+		perror("Close error");
 		return -1;
 	}
 
