@@ -1,13 +1,18 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 #include "libnetfiles.h"
+
+int multiplex_sockets[10];
+Client clients[10];
 
 int main(int argc, char * argv[]){
  
@@ -58,30 +63,38 @@ int main(int argc, char * argv[]){
 
     freeaddrinfo(servinfo); // all done with this structure
 
-    //start listening on the port, allow 5 pending connections
+    //start listening on the port, allow 10 pending connections
     if(listen(serverfd, 10) < 0){
-            perror("Error on listen");
-            exit(0);
+        perror("Error on listen");
+        exit(0);
     }
+
+    socklen_t socklen = sizeof(struct sockaddr_in);
 
     //loop while waiting for connections
     while(1) {
-        clientfd = accept(serverfd, NULL, NULL);
+        Client * client = (Client *)malloc(sizeof(Client));
+        client->addr = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
+        clientfd = accept(serverfd, (struct sockaddr *)client->addr, &socklen);
+
+        client->socket = clientfd;
+        client->addr_size = socklen;
 
         printf("Connected to a client.\n");
 
         pthread_t * thread = malloc(sizeof(pthread_t *));
         
-        pthread_create(thread, NULL, serve_client, (void *)&clientfd);
+        pthread_create(thread, NULL, serve_client, (void *)client);
 
     }
     return 0;
 }
 
 void * serve_client(void * ptr){
+    Client client = *(Client *)ptr;
 
-    int clientfd = *(int *)ptr;
-    char buffer[500];
+    int clientfd = client.socket;
+    char buffer[2000];
 
     while(1){
         memset(buffer, 0, sizeof(buffer));
@@ -89,11 +102,12 @@ void * serve_client(void * ptr){
         int try_recv = recv(clientfd, buffer, sizeof(buffer), 0);
 
         if(try_recv == -1){
-            perror("Error");
+            perror("Error on receive");
             return NULL;
         }
         else if(try_recv == 0){
             printf("Closing connection.\n");
+            close(clientfd);
             return NULL;
         }
         else{
@@ -103,10 +117,10 @@ void * serve_client(void * ptr){
                 handle_open(clientfd, buffer);
             }
             else if(selector == 'r'){
-                handle_read(clientfd, buffer);
+                handle_read(client, buffer);
             }
             else if(selector == 'w'){
-                handle_write(clientfd, buffer);
+                handle_write(client, buffer);
             }
             else if(selector == 'c'){
                 handle_close(clientfd, buffer);
@@ -162,16 +176,49 @@ void handle_open(int clientfd, char * buffer){
     send(clientfd, &response, sizeof(response), 0);
 }
 
-void handle_read(int clientfd, char * buffer){
+void handle_read(Client client, char * buffer){
     Int_packet * message;
     char * response;
-    int filedes;
+    int clientfd = client.socket,
+        filedes;
     size_t nbytes;
     ssize_t bytes_read;
 
     message = (Int_packet *)buffer;
     filedes = message->i;
     nbytes = message->size;
+
+    if(nbytes >= 2000){
+        int partsize,
+            num_socks = nbytes / 2000;
+
+        //lock
+        int socks_left = check_socks();
+
+        //do arithmetic
+        if(socks_left == 0){
+            //unlock
+            //return;
+        }
+        else if(num_socks > socks_left){
+            num_socks = socks_left;
+        }
+
+        partsize = nbytes / num_socks;
+
+        int i;
+        for(i = 0; i < num_socks; i++){
+            //int portno;
+            //int fd = create_sock(client, &portno);
+            //add new fd to message
+            //set port with client.addr.sin_port = htons(portno);
+            //connect(fd, client.addr, client.addr_len);
+            //create new thread to send data to new socket
+            printf("%d\n", partsize);
+
+        }
+        //unlock
+    }
     
     response = malloc(nbytes + 9);
     response[0] = 'r';
@@ -192,12 +239,14 @@ void handle_read(int clientfd, char * buffer){
         printf("Read %ld bytes from file.\n", bytes_read);
         memcpy(response + 1, &bytes_read, sizeof(bytes_read));
         send(clientfd, response, bytes_read + 9, 0);
+        free(response);
     }
 }
 
-void handle_write(int clientfd, char * buffer){
+void handle_write(Client client, char * buffer){
     Int_packet response;
-    int filedes;
+    int filedes,
+        clientfd = client.socket;
     size_t nbytes;
     ssize_t bytes_written;
 
@@ -241,4 +290,28 @@ void handle_close(int clientfd, char * buffer){
     send(clientfd, &response, sizeof(response), 0);
 
     return;
+}
+
+int check_socks(){
+    int i, sum = 0;
+
+    for(i = 0; i < 10; i++){
+        if(multiplex_sockets[i] > 0){
+            sum++;
+        }
+    }
+
+    return sum;
+}
+
+int create_sock(Client client){
+    int i,
+        portno = 20000;
+
+    for(i = 0; i < 10; i++){
+        if(multiplex_sockets[i] == 0){
+            return portno;
+        }
+    }
+    return -1;
 }

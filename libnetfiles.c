@@ -2,7 +2,6 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -62,6 +61,10 @@ int netopen(const char * pathname, int flags){
 	}
 }
 
+//return the number of bytes read
+//if error, set errno and return -1
+
+//required: ETIMEDOUT, EBADF, ECONNRESET
 ssize_t netread(int filedes, void *buf, size_t nbyte){
 
 	ssize_t bytes_read;
@@ -76,6 +79,8 @@ ssize_t netread(int filedes, void *buf, size_t nbyte){
 	recv(server_socket, response, nbyte + 9, 0);
 
 	if(response[0] == 'e'){
+		//errno = response->i;
+		free(response);
 		return -1;
 	}
 	else if(response[0] == 'r'){
@@ -83,18 +88,11 @@ ssize_t netread(int filedes, void *buf, size_t nbyte){
 		memcpy(&bytes_read, response + 1, sizeof(ssize_t));
 		memcpy(buf, response + 9, bytes_read);
 		
+		free(response);
 		return bytes_read;
 	}
 
 	return -1;
-
-
-	//return the number of bytes read
-	//if error, set errno and return -1
-
-	//required: ETIMEDOUT, EBADF, ECONNRESET
-
-	return (ssize_t)0;
 }
 
 //return number of bytes written (must be less than nbyte)
@@ -115,6 +113,7 @@ ssize_t netwrite(int filedes, const void *buf, size_t nbyte){
 	memcpy(message + 1 + sizeof(int) + sizeof(size_t), buf, nbyte);
 
 	send(server_socket, message, message_len, 0);
+	free(message);
 
 	recv(server_socket, &response, sizeof(response), 0);
 
