@@ -150,7 +150,7 @@ void handle_open(int clientfd, char * buffer){
 
     
     sprintf(filename, "%.*s", len - 3, buffer + 3); //modified for extension A
-
+    printf("1\n");
     mode = buffer[1];
     errno = 0;
 
@@ -166,6 +166,7 @@ void handle_open(int clientfd, char * buffer){
     file_node* match = get_file_node(fn_head,filename);
     if(match == NULL){
         insert_file_node(fn_head,filename);
+        if(fn_head->user==NULL)printf("NULL found\n");
         insert_client_node(fn_head->user,q);
         update_file_node(fn_head);
     }else{
@@ -359,6 +360,7 @@ int create_sock(Client client){
 }
 
 file_node* get_file_node(file_node* fn,char* path){
+    printf("get file node\n");
     if(fn == NULL){
         return NULL;
     }
@@ -376,6 +378,7 @@ file_node* get_file_node(file_node* fn,char* path){
 }
 
 void update_file_node(file_node* fn){
+    printf("update\n");
     if(fn->user == NULL){
         fn->exists_client = 0;
         fn->exists_trans = 0;
@@ -404,11 +407,14 @@ void update_file_node(file_node* fn){
 }
 
 void insert_file_node(file_node* head,char* path){
+    printf("insert_file_node\n");
     if(head == NULL){
         head = malloc(sizeof(file_node));
         head->path = path;
         head->prev = head;
         head->next = head;
+        head->user = NULL;
+        printf("initialized\n");
         return;
     }
 
@@ -421,6 +427,7 @@ void insert_file_node(file_node* head,char* path){
 }
 
 void delete_file_node(file_node* fn){
+    printf("delete_file_node\n");
     if(fn == fn_head && fn->prev == fn_head && fn->next == fn_head){
         free(fn_head);
         fn_head = NULL;
@@ -434,6 +441,7 @@ void delete_file_node(file_node* fn){
 }
 
 void insert_client_node(client_node* cn,query* q){
+    printf("insert_client_node\n");
     if (cn == NULL){
         cn = malloc(sizeof(client_node));
         cn->fd = q->fd;
@@ -478,6 +486,7 @@ void insert_client_node(client_node* cn,query* q){
 }
 
 void delete_client_node(client_node* cn,int fd){
+    printf("delete_client_node\n");
     client_node* cur = cn;
     do{
         if(cur->fd == fd){
@@ -492,6 +501,7 @@ void delete_client_node(client_node* cn,int fd){
 
 //return 1 if there is a conflict. Input: query struct, file node struct
 int conflict(query* q, file_node* fn){
+    printf("conflict\n");
     int file_mode = q->file_mode;
     char permission = q->flag;
     if(permission == 'b'){

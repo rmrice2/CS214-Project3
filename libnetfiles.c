@@ -44,7 +44,7 @@ int netopen(const char * pathname, int flags){
 	}
 
 	//extension A : write file mode
-
+	//start
 	switch(file_mode_selected){
 		case UNRESTRICTED:
 			strcat(buffer,"0");
@@ -55,6 +55,7 @@ int netopen(const char * pathname, int flags){
 		case TRANSACTION:
 			strcat(buffer,"2");
 	}
+	//end
 
 	strcat(buffer, pathname);
 	strcat(buffer, "\0");
