@@ -70,12 +70,12 @@ int check_socks();
 
 
 //functions for extension A
-file_node get_file_node(file_node head);//check if the file is already existed. return NULL on failure
-void update_file_node(file_node fn); //check the permission and modes of all clients to set the flags
-void insert_file_node(file_node head,char* path);//create a new file node and put it in the list
-void delete_file_node(file_node fn);//delete a file node
+file_node get_file_node(file_node* head, char* path);//check if the file is already existed. return NULL on failure
+void update_file_node(file_node* fn); //check the permission and modes of all clients to set the flags
+void insert_file_node(file_node* head,char* path);//create a new file node and put it in the list
+void delete_file_node(file_node* fn);//delete a file node
 
-void insert_client_node(client_node cn,query q);
-void delete_client_node(client_node cn);
+void insert_client_node(client_node* cn,query* q);
+void delete_client_node(client_node* cn);
 
 #endif
