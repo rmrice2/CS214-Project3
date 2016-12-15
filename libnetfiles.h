@@ -39,7 +39,7 @@ typedef struct client_node{
 typedef struct file_node{
 	char* path;//full file path with name
 	client_node* user;
-	client_node* prev;
+	file_node* prev;
 	file_node* next;
 	//flags
 	int exists_client; //this file node has at least one user
@@ -76,6 +76,6 @@ void insert_file_node(file_node* head,char* path);//create a new file node and p
 void delete_file_node(file_node* fn);//delete a file node
 
 void insert_client_node(client_node* cn,query* q);
-void delete_client_node(client_node* cn);
+void delete_client_node(client_node* cn,int fd);
 
 #endif

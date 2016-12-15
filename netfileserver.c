@@ -11,6 +11,8 @@
 #include <arpa/inet.h>
 #include "libnetfiles.h"
 
+file_node fn_head;
+
 int multiplex_sockets[10];
 Client clients[10];
 
@@ -314,4 +316,136 @@ int create_sock(Client client){
         }
     }
     return -1;
+}
+
+file_node get_file_node(file_node* fn,char* path){
+    if(fn == NULL){
+        return NULL;
+    }
+
+    file_node* cur = fn;
+    do{
+        if(strcmp(cur->path,path)){
+            return cur;
+        }
+        cur = cur->next;
+
+    }while(cur!=fn);
+    return;
+
+}
+
+void update_file_node(file_node fn){
+    if(fn->user == NULL){
+        fn->exists_client = 0;
+        fn->exists_trans = 0;
+        fn->exists_write = 0;
+        fn->exists_exclusivew = 0;
+        return;
+    }
+    fn->exists_client = 1;
+
+    client_node* cur = fn->user;
+
+    do{
+        if(cur->file_mode == TRANSACTION){
+            fn->exists_trans = 1;
+        }
+        if(cur->file_mode == EXCLUSIVE && cur->write == 1){
+            fn->exists_write = 1;
+            fn->exists_exclusivew = 1;
+        }
+        if(cur->write == 1){
+            fn->exists_write = 1;
+        }
+
+    }while(cur!=fn->user);
+    return;
+}
+
+void insert_file_node(file_node* head,char* path){
+    if(head == NULL){
+        head = malloc(sizeof(file_node));
+        head->path = path;
+        head->prev = head;
+        head->next = head;
+        return;
+    }
+
+    file_node* new = malloc(sizeof(file_node));
+    head->prev->next = new;
+    new->next = head;
+    head->prev = new;
+    new->path = path;
+    return;
+}
+
+void delete_file_node(file_node* fn){
+    if(fn == head && fn->prev == head && fn->next ==head){
+        free(head);
+        head = NULL;
+        return;
+    }
+
+    fn->prev->next = fn->next;
+    fn->next->prev = fn->prev;
+    free(fn);
+    return;
+}
+
+void insert_client_node(client_node* cn,query* q){
+    if (cn == NULL){
+        cn = malloc(sizeof(client_node));
+        cn->fd = q->fd;
+        cn->file_mode = q->file_mode;
+        switch(q->flag){
+            case 'r':
+                cn->read = 1;
+                break;
+            case 'w':
+                cn->write = 1;
+                break;
+            case 'b':
+                cn->read = 1;
+                cn->write = 1;
+                break;
+        }
+        cn->prev = cn;
+        cn->next = cn;
+        return;
+    }
+
+    client_node* new = malloc(sizeof(client_node));
+    new->fd = q->fd;
+    new->file_mode = q->file_mode;
+    switch(q->flag){
+            case 'r':
+                new->read = 1;
+                break;
+            case 'w':
+                new->write = 1;
+                break;
+            case 'b':
+                new->read = 1;
+                new->write = 1;
+                break;
+    }
+    cn->prev->next = new;
+    new->next = cn;
+    cn->prev = new;
+
+    return;
+}
+
+void delete_client_node(client_node* cn,int fd){
+    client_node* cur = cn
+    do{
+        if(cur->fd == fd){
+            cur->prev->next = cur->next;
+            cur->next->prev = cur->prev;
+            free(cur);
+            return;
+        }
+    }while(cur! = cn);
+    return;
 }
