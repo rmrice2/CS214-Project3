@@ -55,7 +55,6 @@ int netopen(const char * pathname, int flags){
 		case TRANSACTION:
 			strcat(buffer,"2");
 	}
-:
 
 	strcat(buffer, pathname);
 	strcat(buffer, "\0");

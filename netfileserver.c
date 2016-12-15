@@ -11,7 +11,7 @@
 #include <arpa/inet.h>
 #include "libnetfiles.h"
 
-file_node fn_head;
+file_node* fn_head;
 
 int multiplex_sockets[10];
 Client clients[10];
@@ -156,19 +156,20 @@ void handle_open(int clientfd, char * buffer){
 
     //start of extension A code
     int file_mode = buffer[2];
-    query q = malloc(sizeof(query));
+    query* q = malloc(sizeof(query));
     q->fd = clientfd;
     q->op = 'o';
     q->flag = mode;
     q->file_mode = file_mode;
     q->msg = filename;
 
-    if(get_file_node(fn_head,filename)==NULL){
+    file_node* match = get_file_node(fn_head,filename);
+    if(match == NULL){
         insert_file_node(fn_head,filename);
         insert_client_node(fn_head->user,q);
         update_file_node(fn_head);
     }else{
-        file_node match = get_file_node(fn_head,filename);
+        
         if(conflict(q,match)){
             perror("permission denied\n");
             return;
@@ -320,9 +321,9 @@ void handle_close(int clientfd, char * buffer){
     }
 
     //extension A code start
-    file_node cur = fn_head;
+    file_node* cur = fn_head;
     do{
-        delete_client_node(clientfd);
+        delete_client_node(cur->user,clientfd);
         update_file_node(cur);
         cur = cur->next;
     }while(cur!=fn_head);
@@ -357,7 +358,7 @@ int create_sock(Client client){
     return -1;
 }
 
-file_node get_file_node(file_node* fn,char* path){
+file_node* get_file_node(file_node* fn,char* path){
     if(fn == NULL){
         return NULL;
     }
@@ -370,11 +371,11 @@ file_node get_file_node(file_node* fn,char* path){
         cur = cur->next;
 
     }while(cur!=fn);
-    return;
+    return NULL;
 
 }
 
-void update_file_node(file_node fn){
+void update_file_node(file_node* fn){
     if(fn->user == NULL){
         fn->exists_client = 0;
         fn->exists_trans = 0;
@@ -420,9 +421,9 @@ void insert_file_node(file_node* head,char* path){
 }
 
 void delete_file_node(file_node* fn){
-    if(fn == head && fn->prev == head && fn->next ==head){
-        free(head);
-        head = NULL;
+    if(fn == fn_head && fn->prev == fn_head && fn->next == fn_head){
+        free(fn_head);
+        fn_head = NULL;
         return;
     }
 
@@ -477,7 +478,7 @@ void insert_client_node(client_node* cn,query* q){
 }
 
 void delete_client_node(client_node* cn,int fd){
-    client_node* cur = cn
+    client_node* cur = cn;
     do{
         if(cur->fd == fd){
             cur->prev->next = cur->next;
@@ -485,12 +486,12 @@ void delete_client_node(client_node* cn,int fd){
             free(cur);
             return;
         }
-    }while(cur! = cn);
+    }while(cur != cn);
     return;
 }
 
 //return 1 if there is a conflict. Input: query struct, file node struct
-int conflict(query q, file_node fn){
+int conflict(query* q, file_node* fn){
     int file_mode = q->file_mode;
     char permission = q->flag;
     if(permission == 'b'){
