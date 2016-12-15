@@ -147,11 +147,41 @@ void handle_open(int clientfd, char * buffer){
     Int_packet response;
     
     len = strlen(buffer);
+
     
-    sprintf(filename, "%.*s", len - 2, buffer + 2);
+    sprintf(filename, "%.*s", len - 3, buffer + 3); //modified for extension A
 
     mode = buffer[1];
     errno = 0;
+
+    //start of extension A code
+    int file_mode = buffer[2];
+    query q = malloc(sizeof(query));
+    q->fd = clientfd;
+    q->op = 'o';
+    q->flag = mode;
+    q->file_mode = file_mode;
+    q->msg = filename;
+
+    if(get_file_node(fn_head,filename)==NULL){
+        insert_file_node(fn_head,filename);
+        insert_client_node(fn_head->user,q);
+        update_file_node(fn_head);
+    }else{
+        file_node match = get_file_node(fn_head,filename);
+        if(conflict(q,match)){
+            perror("permission denied\n");
+            return;
+        }else{
+            insert_client_node(match->user,q);
+            update_file_node(match);
+        }
+
+    }
+    //end of extension A in open function
+
+
+
     if(mode == 'r'){
         response.i = open(filename, O_RDONLY);
     }
@@ -288,6 +318,15 @@ void handle_close(int clientfd, char * buffer){
     else{
         printf("Closed file.\n");
     }
+
+    //extension A code start
+    file_node cur = fn_head;
+    do{
+        delete_client_node(clientfd);
+        update_file_node(cur);
+        cur = cur->next;
+    }while(cur!=fn_head);
+    //extension A code end
 
     send(clientfd, &response, sizeof(response), 0);
 
@@ -448,4 +487,45 @@ void delete_client_node(client_node* cn,int fd){
         }
     }while(cur! = cn);
     return;
+}
+
+//return 1 if there is a conflict. Input: query struct, file node struct
+int conflict(query q, file_node fn){
+    int file_mode = q->file_mode;
+    char permission = q->flag;
+    if(permission == 'b'){
+        permission = 'w';
+    }
+
+    if(file_mode == 0 && permission == 'r'){
+        if(fn->exists_trans){
+            return 1;
+        }
+    }
+
+    if(file_mode == 0 && permission == 'w'){
+        if(fn->exists_trans || fn->exists_exclusivew){
+            return 1;
+        }
+    }
+
+    if(file_mode == 1 && permission == 'r'){
+        if(fn->exists_trans){
+            return 1;
+        }
+    }
+
+    if(file_mode == 1 && permission == 'w'){
+        if(fn->exists_trans || fn->exists_write){
+            return 1;
+        }
+    }
+
+    if(file_mode == 2){
+        if(fn->exists_client){
+            return 1;
+        }
+    }
+
+    return 0;
 }

@@ -12,6 +12,8 @@
 
 int server_socket;
 
+int file_mode_selected;
+
 /*This method takes a pathname and a permissions flag and
 returns a file descriptor or -1 if an error occured
 
@@ -40,6 +42,20 @@ int netopen(const char * pathname, int flags){
 		printf("Error: Invalid flag.");
 		return -1;
 	}
+
+	//extension A : write file mode
+
+	switch(file_mode_selected){
+		case UNRESTRICTED:
+			strcat(buffer,"0");
+			break;
+		case EXCLUSIVE:
+			strcat(buffer,"1");
+			break;
+		case TRANSACTION:
+			strcat(buffer,"2");
+	}
+:
 
 	strcat(buffer, pathname);
 	strcat(buffer, "\0");
@@ -195,6 +211,8 @@ int netserverinit(char * hostname, int filemode){
 
 	printf("Server found.\n");
 	server_socket = clientfd;
+
+	file_mode_selected = filemode;//set file mode
 	return 0;
 }
 
